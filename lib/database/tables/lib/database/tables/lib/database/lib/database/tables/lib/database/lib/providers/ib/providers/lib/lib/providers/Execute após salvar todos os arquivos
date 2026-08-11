@@ -1,3 +1,0 @@
-// Execute após salvar todos os arquivos
-
-dart run build_runner build --delete-conflicting-outputs
