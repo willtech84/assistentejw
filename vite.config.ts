@@ -9,6 +9,16 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
+      // injectManifest (em vez de generateSW): precisamos de um service
+      // worker com lógica própria para interceptar o POST do Web Share
+      // Target (ver src/sw.ts). O generateSW só sabe gerar cache de
+      // assets estáticos, sem espaço para fetch handlers customizados.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+      },
       manifest: {
         name: "Assistente JW",
         short_name: "Assistente JW",
@@ -34,9 +44,6 @@ export default defineConfig({
             files: [{ name: "arquivos", accept: ["application/pdf", ".pdf"] }],
           },
         },
-      },
-      workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
       },
     }),
   ],

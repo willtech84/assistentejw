@@ -29,10 +29,18 @@ export default function Envios() {
   }, []);
 
   async function enviarUm(d: Designacao) {
+    if (!d.estudante_id) {
+      alert(
+        `"${d.estudante}" não está vinculado a um estudante cadastrado. ` +
+          `Vá em "Designações" e selecione o estudante antes de enviar.`
+      );
+      return;
+    }
+
     const { data: estudante } = await supabase
       .from("estudantes")
       .select("id, telefone")
-      .ilike("nome", d.estudante)
+      .eq("id", d.estudante_id)
       .maybeSingle();
 
     if (!estudante?.telefone) {

@@ -66,6 +66,7 @@ export type Designacao = {
   nome: string;
   tipo: string;
   estudante: string;
+  estudante_id: string | null;
   ajudante: string;
   data_reuniao: string; // YYYY-MM-DD
   semana: string;
@@ -84,10 +85,13 @@ export type PdfRecebido = {
   nome_arquivo: string;
   caminho_arquivo: string;
   estudante: string;
+  estudante_id: string | null;
   telefone: string;
   processado: boolean;
   enviado_whatsapp: boolean;
   recebido_em: string;
+  texto_extraido: string | null;
+  tipo_detectado: string;
 }
 
 export type HistoricoEnvio = {
