@@ -1,0 +1,7 @@
+https://wol.jw.org/pt/wol/meetings/r5/lp-t/2026/34
+é possível usar esse link para o app fazer o download das semanas a frente e deixar salvo no BD?
+na aba designações, ao clicar para enviar, o pdf já vai como anexo a mensagem, obrigatoriamente tem que ir o pdf...
+e esses pdf não precisam ficar salvos, somente o registro de envio e do lembrete, mas deve haver uma opção para recriar o pdf se necessário
+
+
+
