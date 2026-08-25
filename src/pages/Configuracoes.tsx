@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Configuracoes as ConfiguracoesType } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
+import { useAuth } from "../hooks/useAuth";
+import {
+  ativarNotificacoes,
+  desativarNotificacoes,
+  statusPermissao,
+  suportaPush,
+} from "../services/push";
 
 const PADRAO: Partial<ConfiguracoesType> = {
   congregacao: "",
@@ -14,9 +21,13 @@ const PADRAO: Partial<ConfiguracoesType> = {
 };
 
 export default function Configuracoes() {
+  const { user } = useAuth();
   const [config, setConfig] = useState<Partial<ConfiguracoesType>>(PADRAO);
   const [carregando, setCarregando] = useState(true);
   const [salvo, setSalvo] = useState(false);
+  const [statusPush, setStatusPush] = useState(statusPermissao());
+  const [erroPush, setErroPush] = useState("");
+  const [ativandoPush, setAtivandoPush] = useState(false);
 
   useEffect(() => {
     supabase
@@ -97,6 +108,58 @@ export default function Configuracoes() {
           checked={config.notificacoes ?? true}
           onChange={(v) => setConfig({ ...config, notificacoes: v })}
         />
+
+        {suportaPush() && (
+          <div className="rounded-lg border border-slate-200 p-3 text-sm">
+            <p className="mb-2 text-slate-600">
+              Lembrete automático de designações pendentes, enviado por
+              notificação push neste navegador/dispositivo.
+            </p>
+            {statusPush === "granted" ? (
+              <button
+                type="button"
+                disabled={ativandoPush}
+                onClick={async () => {
+                  setAtivandoPush(true);
+                  setErroPush("");
+                  try {
+                    await desativarNotificacoes();
+                    setStatusPush(statusPermissao());
+                  } catch (e) {
+                    setErroPush((e as Error).message);
+                  } finally {
+                    setAtivandoPush(false);
+                  }
+                }}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Desativar neste dispositivo
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={ativandoPush || !user}
+                onClick={async () => {
+                  if (!user) return;
+                  setAtivandoPush(true);
+                  setErroPush("");
+                  try {
+                    await ativarNotificacoes(user.id);
+                    setStatusPush(statusPermissao());
+                  } catch (e) {
+                    setErroPush((e as Error).message);
+                  } finally {
+                    setAtivandoPush(false);
+                  }
+                }}
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {ativandoPush ? "Ativando..." : "Ativar neste dispositivo"}
+              </button>
+            )}
+            {erroPush && <p className="mt-2 text-red-600">{erroPush}</p>}
+          </div>
+        )}
 
         <div className="flex items-center gap-3 pt-2">
           <button

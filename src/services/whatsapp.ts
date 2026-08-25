@@ -26,6 +26,62 @@ export function abrirWhatsapp(telefone: string, mensagem: string) {
   window.open(montarLinkWhatsapp(telefone, mensagem), "_blank");
 }
 
+/**
+ * Envia a mensagem já preenchida no WhatsApp COM o PDF anexado, na
+ * medida do que o navegador permite:
+ *
+ * - Onde existe Web Share API com suporte a arquivos (a grande maioria
+ *   dos celulares Android/iOS): abre a folha de compartilhamento
+ *   nativa já com o PDF e o texto prontos — a pessoa só toca em
+ *   WhatsApp na lista e o anexo vai junto. Isso É um anexo automático
+ *   de verdade.
+ * - Onde não existe (a maioria dos navegadores de computador): não tem
+ *   como um site anexar arquivo num chat do WhatsApp Web sozinho — é
+ *   bloqueado por segurança do navegador. Nesse caso baixamos o PDF
+ *   automaticamente e abrimos o WhatsApp com a mensagem pronta; a
+ *   pessoa arrasta o arquivo baixado pro chat que abriu.
+ *
+ * Devolve "compartilhado" | "baixado" pra a tela mostrar a instrução
+ * certa pro que de fato aconteceu.
+ */
+export async function enviarComAnexo(
+  telefone: string,
+  mensagem: string,
+  pdfBytes: Uint8Array,
+  nomeArquivo: string
+): Promise<"compartilhado" | "baixado"> {
+  const arquivo = new File([new Uint8Array(pdfBytes)], nomeArquivo, {
+    type: "application/pdf",
+  });
+
+  if (
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [arquivo] })
+  ) {
+    try {
+      await navigator.share({ files: [arquivo], text: mensagem });
+      return "compartilhado";
+    } catch (err) {
+      // Usuário cancelou a folha de compartilhamento — não é erro real,
+      // mas também não teve envio, então recai no fluxo de download.
+      if ((err as Error)?.name === "AbortError") {
+        throw err;
+      }
+    }
+  }
+
+  const url = URL.createObjectURL(arquivo);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nomeArquivo;
+  link.click();
+  URL.revokeObjectURL(url);
+
+  abrirWhatsapp(telefone, mensagem);
+  return "baixado";
+}
+
 export function montarMensagemDesignacao(params: {
   mensagemPadrao: string;
   nomeEstudante: string;

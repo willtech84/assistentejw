@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Designacao, Configuracoes } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
-import { abrirWhatsapp, montarMensagemDesignacao } from "../services/whatsapp";
+import { enviarComAnexo, montarMensagemDesignacao } from "../services/whatsapp";
+import { gerarS89, nomeArquivoS89 } from "../services/s89";
 
 export default function Envios() {
   const [pendentes, setPendentes] = useState<Designacao[]>([]);
@@ -55,7 +56,25 @@ export default function Envios() {
       semana: d.semana,
     });
 
-    abrirWhatsapp(estudante.telefone, mensagem);
+    try {
+      const pdfBytes = await gerarS89(d);
+      const resultado = await enviarComAnexo(
+        estudante.telefone,
+        mensagem,
+        pdfBytes,
+        nomeArquivoS89(d)
+      );
+      if (resultado === "baixado") {
+        alert(
+          "O S-89 preenchido foi baixado e o WhatsApp abriu com a mensagem pronta — " +
+            "arraste o arquivo baixado pro chat que abriu para anexar."
+        );
+      }
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") return; // cancelou a folha de compartilhamento
+      alert(`Não foi possível gerar o S-89: ${(err as Error).message}`);
+      return;
+    }
 
     await supabase.from("designacoes").update({ whatsapp_enviado: true }).eq("id", d.id);
     await supabase.from("historico_envios").insert({

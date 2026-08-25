@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Designacao, Configuracoes } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
-import { abrirWhatsapp, montarMensagemDesignacao } from "../services/whatsapp";
+import { enviarComAnexo, montarMensagemDesignacao } from "../services/whatsapp";
+import { gerarS89, nomeArquivoS89 } from "../services/s89";
 import {
   carregarEstudantesDoUsuario,
   type EstudanteBasico,
@@ -112,7 +113,25 @@ export default function Designacoes() {
       return;
     }
 
-    abrirWhatsapp(estudante.telefone, mensagem);
+    try {
+      const pdfBytes = await gerarS89(d);
+      const resultado = await enviarComAnexo(
+        estudante.telefone,
+        mensagem,
+        pdfBytes,
+        nomeArquivoS89(d)
+      );
+      if (resultado === "baixado") {
+        alert(
+          "O S-89 preenchido foi baixado e o WhatsApp abriu com a mensagem pronta — " +
+            "arraste o arquivo baixado pro chat que abriu para anexar."
+        );
+      }
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") return; // cancelou a folha de compartilhamento
+      alert(`Não foi possível gerar o S-89: ${(err as Error).message}`);
+      return;
+    }
     if (config?.confirmar_antes_enviar !== false) {
       if (confirm("Marcar esta designação como enviada?")) {
         await marcarEnviada(d);
@@ -285,6 +304,27 @@ export default function Designacoes() {
               value={editando.ajudante ?? ""}
               onChange={(v) => setEditando({ ...editando, ajudante: v })}
             />
+            <Campo
+              label="Número da parte (para o S-89)"
+              value={editando.numero_parte ?? ""}
+              onChange={(v) => setEditando({ ...editando, numero_parte: v })}
+            />
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Local
+              </label>
+              <select
+                value={editando.sala ?? "Principal"}
+                onChange={(e) =>
+                  setEditando({ ...editando, sala: e.target.value })
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="Principal">Salão principal</option>
+                <option value="B">Sala B</option>
+                <option value="C">Sala C</option>
+              </select>
+            </div>
             <Campo
               label="Semana (ex: 11-17 de agosto)"
               value={editando.semana ?? ""}

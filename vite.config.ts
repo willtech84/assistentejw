@@ -3,7 +3,20 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// GitHub Pages de projeto (não é um site de usuário/organização) serve
+// tudo sob um subcaminho, ex: https://<usuario>.github.io/assistentejw/
+// — não na raiz do domínio. Isso precisa refletir em vários lugares:
+// os assets (Vite cuida disso via "base"), o manifest do PWA
+// (start_url/scope), o registro do Web Share Target e os caminhos
+// absolutos usados dentro do service worker (src/sw.ts).
+//
+// Rodando localmente (npm run dev / npm run preview) o Vite também usa
+// esse mesmo "base", então os testes locais continuam batendo com o
+// que vai pro ar.
+const BASE = "/assistentejw/";
+
 export default defineConfig({
+  base: BASE,
   plugins: [
     react(),
     tailwindcss(),
@@ -26,7 +39,8 @@ export default defineConfig({
         theme_color: "#4f46e5",
         background_color: "#ffffff",
         display: "standalone",
-        start_url: "/",
+        start_url: BASE,
+        scope: BASE,
         icons: [
           { src: "icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icon-512.png", sizes: "512x512", type: "image/png" },
@@ -35,7 +49,7 @@ export default defineConfig({
         // destino ao "compartilhar" um PDF de outro app — substitui o
         // ShareReceiverScreen do app Flutter original.
         share_target: {
-          action: "/share-target",
+          action: `${BASE}share-target`,
           method: "POST",
           enctype: "multipart/form-data",
           params: {

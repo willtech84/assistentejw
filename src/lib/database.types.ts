@@ -71,6 +71,7 @@ export type Designacao = {
   data_reuniao: string; // YYYY-MM-DD
   semana: string;
   sala: string;
+  numero_parte: string;
   observacoes: string;
   concluida: boolean;
   pdf_enviado: boolean;
@@ -107,6 +108,17 @@ export type HistoricoEnvio = {
   enviado_em: string;
 }
 
+export type PushSubscription = {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string;
+  criado_em: string;
+  ultimo_uso: string;
+}
+
 // Shape mínimo para satisfazer o generic do supabase-js (GenericSchema)
 // sem depender de codegen. Cada tabela é tratada como Row = Insert =
 // Update por simplicidade (os campos com default cobrem os casos de
@@ -131,6 +143,7 @@ export type Database = {
       designacoes: Tables<Designacao>;
       pdfs_recebidos: Tables<PdfRecebido>;
       historico_envios: Tables<HistoricoEnvio>;
+      push_subscriptions: Tables<PushSubscription>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

@@ -26,6 +26,11 @@ SuperVenda, Plantão).
 2. No SQL Editor do painel do Supabase, rode nesta ordem:
    - `supabase/migrations/0001_initial_schema.sql`
    - `supabase/migrations/0002_storage_pdfs.sql`
+   - `supabase/migrations/0003_estudante_fk.sql`
+   - `supabase/migrations/0004_pdf_extraction.sql`
+   - `supabase/migrations/0005_push_subscriptions.sql`
+   - `supabase/migrations/0006_cron_lembretes.sql` (só depois de configurar
+     a Edge Function — ver seção "Notificações push" abaixo)
 3. Copie `.env.example` para `.env.local` e preencha com a URL e a
    `anon key` do seu projeto (Project Settings → API).
 4. Instale as dependências e rode:
@@ -48,6 +53,38 @@ Para hospedar no Cloudflare Pages: build command `npm run build`, diretório
 de saída `dist`, e configure `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
 como variáveis de ambiente do projeto no painel do Cloudflare.
 
+## Hospedando no GitHub Pages
+
+Diferente dos outros apps do projeto (que usam Cloudflare Pages), este
+está configurado para servir sob `https://<usuario>.github.io/assistentejw/`
+— um GitHub Pages de projeto, que fica num subcaminho, não na raiz do
+domínio. Isso já está refletido em `vite.config.ts` (`base`), no
+`basename` do `BrowserRouter` (`src/App.tsx`) e nos caminhos do service
+worker (`src/sw.ts`).
+
+1. Preencha `.env.local` (ou `.env.production`) com
+   `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e
+   `VITE_VAPID_PUBLIC_KEY` — essas variáveis são embutidas no build no
+   momento em que você roda `npm run build`/`npm run deploy`.
+2. Rode:
+
+   ```bash
+   npm install   # traz a dependência gh-pages
+   npm run deploy
+   ```
+
+   Isso builda o projeto e publica o conteúdo de `dist/` na branch
+   `gh-pages` do repositório (o pacote `gh-pages` cuida do push).
+3. No GitHub, vá em Settings → Pages e, em "Build and deployment",
+   selecione Source = "Deploy from a branch", branch = `gh-pages`,
+   pasta = `/ (root)`. Salve.
+4. Depois de alguns minutos, o site fica em
+   `https://<seu-usuário>.github.io/assistentejw/`.
+
+Toda vez que quiser publicar uma atualização, rode `npm run deploy` de
+novo. Não há CI configurado — é um comando manual, do jeito mais
+simples possível.
+
 ## O que já funciona
 
 - Autenticação (email/senha via Supabase Auth)
@@ -62,6 +99,87 @@ como variáveis de ambiente do projeto no painel do Cloudflare.
 - PWA instalável, com Web Share Target configurado (para receber PDF
   compartilhado de outro app no Android/Chrome)
 
+## Notificações push
+
+Lembrete diário, enviado pra você (dono da conta/congregação) — não pros
+estudantes — avisando que há uma reunião próxima com designações ainda
+não enviadas pelo WhatsApp. Estudantes continuam recebendo só o link
+`wa.me`, como hoje.
+
+Peças envolvidas:
+
+- `push_subscriptions` (migration `0005`) — guarda a inscrição de Web Push
+  de cada navegador/dispositivo que você ativar.
+- `src/services/push.ts` + botão em Configurações — ativa/desativa a
+  notificação no dispositivo atual.
+- `src/sw.ts` — recebe o push e mostra a notificação.
+- `supabase/functions/send-lembretes` — Edge Function (Deno) que roda uma
+  vez por dia, olha as reuniões do dia seguinte com designações
+  pendentes e manda o push.
+- `supabase/migrations/0006_cron_lembretes.sql` — agenda essa função via
+  `pg_cron` + `pg_net`.
+
+### 1. Chaves VAPID
+
+Um par de chaves VAPID já foi gerado para este projeto (ver mensagem em
+que este pacote foi entregue). Se quiser gerar um novo par:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Coloque a chave **pública** em `VITE_VAPID_PUBLIC_KEY` (`.env.local`, e
+também como variável de ambiente no Cloudflare Pages). A chave
+**privada** nunca vai no `.env` nem no repositório — só como secret da
+Edge Function (próximo passo).
+
+### 2. Deploy da Edge Function
+
+Precisa do [Supabase CLI](https://supabase.com/docs/guides/cli) instalado
+e logado (`supabase login`).
+
+```bash
+# na raiz do projeto
+supabase link --project-ref SEU-PROJETO   # Project Settings > General > Reference ID
+
+supabase secrets set \
+  VAPID_PUBLIC_KEY=coleaquiapublica \
+  VAPID_PRIVATE_KEY=coleaquiaprivada \
+  VAPID_SUBJECT=mailto:seuemail@exemplo.com
+
+supabase functions deploy send-lembretes
+```
+
+`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` **não** precisam ser
+configuradas como secret — o Supabase já injeta essas duas
+automaticamente em toda Edge Function.
+
+Teste manual (deve responder `{"enviados":0,"falhas":0}` se não houver
+reunião amanhã com pendências):
+
+```bash
+curl -X POST 'https://SEU-PROJETO.supabase.co/functions/v1/send-lembretes' \
+  -H "Authorization: Bearer SUA-SERVICE-ROLE-KEY"
+```
+
+### 3. Agendar o cron
+
+Abra `supabase/migrations/0006_cron_lembretes.sql`, substitua
+`SEU-PROJETO` e `SUA-SERVICE-ROLE-KEY` pelos valores do seu projeto
+(Project Settings → API) e rode o arquivo no SQL Editor do painel — só
+uma vez. Por padrão roda todo dia às 18:00 UTC (15:00 em Brasília, sem
+horário de verão); ajuste o `'0 18 * * *'` se quiser outro horário.
+
+Para conferir se está agendado: `select * from cron.job;` no SQL
+Editor.
+
+### 4. Ativar no app
+
+Depois do deploy, abra o app publicado (`https://<usuário>.github.io/assistentejw/`)
+→ Configurações → "Ativar neste dispositivo", na seção de notificações.
+Isso vale por navegador/aparelho — quem for testar em outro celular
+precisa ativar de novo lá.
+
 ## O que ainda é próximo passo (não implementado)
 
 - **Extração de texto de PDF** (identificar automaticamente estudante/tipo
@@ -70,8 +188,6 @@ como variáveis de ambiente do projeto no painel do Cloudflare.
   `processador_pdf_service.dart` eram stubs). Ficou de fora por enquanto;
   se quiser, dá pra adicionar com `pdfjs-dist` no client ou uma Supabase
   Edge Function.
-- **Notificações push de verdade** (hoje não há lembrete automático antes da
-  reunião) — precisa de VAPID keys + service worker de push.
 - **Envio automático de WhatsApp** — exigiria a API oficial do WhatsApp
   Business (credenciais e aprovação da Meta). O que existe hoje é o
   fluxo manual via `wa.me`.

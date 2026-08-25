@@ -32,9 +32,19 @@ precacheAndRoute(self.__WB_MANIFEST);
 
 const CACHE_SHARE_TARGET = "assistente-jw-share-target";
 
+// self.registration.scope já vem com o subcaminho certo (ex:
+// "https://usuario.github.io/assistentejw/"), então construímos os
+// caminhos a partir dele em vez de assumir que o app está na raiz do
+// domínio — necessário pro GitHub Pages, que serve o projeto sob
+// /assistentejw/ e não em "/".
+const SCOPE_PATH = new URL(self.registration.scope).pathname;
+
 self.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
-  if (event.request.method === "POST" && url.pathname === "/share-target") {
+  if (
+    event.request.method === "POST" &&
+    url.pathname === `${SCOPE_PATH}share-target`
+  ) {
     event.respondWith(tratarCompartilhamento(event.request));
   }
 });
@@ -59,7 +69,7 @@ async function tratarCompartilhamento(request: Request): Promise<Response> {
     console.error("Falha ao processar PDF compartilhado:", err);
   }
 
-  return Response.redirect("/pdfs?compartilhado=1", 303);
+  return Response.redirect(`${SCOPE_PATH}pdfs?compartilhado=1`, 303);
 }
 
 self.addEventListener("install", () => {
@@ -68,4 +78,50 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(self.clients.claim());
+});
+
+// ---------------------------------------------------------------
+// Notificações push (lembrete de reunião)
+//
+// O payload é enviado pela Edge Function supabase/functions/send-lembretes
+// como JSON: { title, body, url }. "url" é a rota do app pra abrir ao
+// clicar na notificação (ex: "/designacoes").
+// ---------------------------------------------------------------
+
+self.addEventListener("push", (event: PushEvent) => {
+  let dados: { title?: string; body?: string; url?: string } = {};
+  try {
+    dados = event.data ? event.data.json() : {};
+  } catch {
+    dados = { body: event.data?.text() ?? "" };
+  }
+
+  const titulo = dados.title ?? "Assistente JW";
+  const opcoes: NotificationOptions = {
+    body: dados.body ?? "Você tem uma designação na próxima reunião.",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    data: { url: dados.url ?? SCOPE_PATH },
+  };
+
+  event.waitUntil(self.registration.showNotification(titulo, opcoes));
+});
+
+self.addEventListener("notificationclick", (event: NotificationEvent) => {
+  event.notification.close();
+  const url = (event.notification.data?.url as string) ?? SCOPE_PATH;
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if ("focus" in client) {
+            client.navigate(url);
+            return client.focus();
+          }
+        }
+        return self.clients.openWindow(url);
+      })
+  );
 });
