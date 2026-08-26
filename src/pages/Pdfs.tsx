@@ -187,6 +187,35 @@ export default function Pdfs() {
     carregar();
   }
 
+  async function excluirPdf(p: PdfRecebido) {
+    if (!confirm(`Excluir "${p.nome_arquivo}"? O arquivo também será apagado do armazenamento.`))
+      return;
+    if (p.caminho_arquivo) {
+      await supabase.storage.from("pdfs").remove([p.caminho_arquivo]);
+    }
+    await supabase.from("pdfs_recebidos").delete().eq("id", p.id);
+    carregar();
+  }
+
+  async function limparTodosPdfs() {
+    if (
+      !confirm(
+        `Excluir TODOS os ${lista.length} PDFs recebidos (e os arquivos no armazenamento)? Essa ação não pode ser desfeita.`
+      )
+    )
+      return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const caminhos = lista.map((p) => p.caminho_arquivo).filter(Boolean) as string[];
+    if (caminhos.length > 0) {
+      await supabase.storage.from("pdfs").remove(caminhos);
+    }
+    await supabase.from("pdfs_recebidos").delete().eq("user_id", user.id);
+    carregar();
+  }
+
   return (
     <div>
       <PageHeader title="PDFs e Importação" />
@@ -198,7 +227,8 @@ export default function Pdfs() {
               Importar designações (Excel)
             </h2>
             <p className="mb-3 text-xs text-slate-500">
-              Colunas esperadas: Data, Tipo, Estudante, Ajudante, Sala, Semana.
+              Envie o S-140 (planilha de programação da reunião, baixada do
+              jw.org) — detecta datas, salas e designações automaticamente.
             </p>
             <input
               ref={inputExcel}
@@ -238,9 +268,19 @@ export default function Pdfs() {
         )}
 
         <div>
-          <h2 className="mb-2 text-sm font-semibold text-slate-500">
-            PDFs recebidos
-          </h2>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-500">
+              PDFs recebidos
+            </h2>
+            {lista.length > 0 && (
+              <button
+                onClick={limparTodosPdfs}
+                className="rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+              >
+                Limpar tudo
+              </button>
+            )}
+          </div>
           {carregando ? (
             <p className="text-sm text-slate-500">Carregando...</p>
           ) : lista.length === 0 ? (
@@ -261,15 +301,23 @@ export default function Pdfs() {
                         {new Date(p.recebido_em).toLocaleString("pt-BR")}
                       </p>
                     </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        p.processado
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {p.processado ? "Processado" : "Pendente"}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          p.processado
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {p.processado ? "Processado" : "Pendente"}
+                      </span>
+                      <button
+                        onClick={() => excluirPdf(p)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Excluir
+                      </button>
+                    </div>
                   </div>
 
                   {!p.processado && (

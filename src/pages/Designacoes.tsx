@@ -141,6 +141,27 @@ export default function Designacoes() {
     }
   }
 
+  async function excluir(d: Designacao) {
+    if (!confirm(`Excluir a designação de "${d.estudante || d.tipo}"?`)) return;
+    await supabase.from("designacoes").delete().eq("id", d.id);
+    carregar();
+  }
+
+  async function limparTudo() {
+    if (
+      !confirm(
+        `Excluir TODAS as ${lista.length} designações cadastradas? Essa ação não pode ser desfeita.`
+      )
+    )
+      return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("designacoes").delete().eq("user_id", user.id);
+    carregar();
+  }
+
   const porSemana = agrupar(lista);
 
   return (
@@ -148,12 +169,22 @@ export default function Designacoes() {
       <PageHeader
         title="Designações"
         action={
-          <button
-            onClick={() => setEditando({ sala: "Principal" })}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-          >
-            + Nova
-          </button>
+          <div className="flex items-center gap-2">
+            {lista.length > 0 && (
+              <button
+                onClick={limparTudo}
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+              >
+                Limpar tudo
+              </button>
+            )}
+            <button
+              onClick={() => setEditando({ sala: "Principal" })}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              + Nova
+            </button>
+          </div>
         }
       />
 
@@ -213,6 +244,12 @@ export default function Designacoes() {
                         className="text-xs text-indigo-600 hover:underline"
                       >
                         Editar
+                      </button>
+                      <button
+                        onClick={() => excluir(d)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Excluir
                       </button>
                     </div>
                   </div>
