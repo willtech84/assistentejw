@@ -1,0 +1,1 @@
+var e=`/assistentejw/assets/pdf.worker-CLesOks4.mjs`;export{e as default};
