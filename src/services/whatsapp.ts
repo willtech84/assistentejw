@@ -1,15 +1,28 @@
-// Envio via WhatsApp usando deep links wa.me.
+// Envio via WhatsApp usando deep links.
 //
 // Importante: isso NÃO é envio automático. Não há uma API oficial do
 // WhatsApp Business configurada (exigiria credenciais e aprovação da
 // Meta), então cada "envio" abre o WhatsApp Web/App com a mensagem já
-// preenchida, e a pessoa dá o "Enviar" manualmente — mesmo espírito do
-// FilaEnvioService original, mas sem automação de background (que só
-// é possível com API oficial ou um servidor rodando WhatsApp Web
-// via biblioteca não-oficial, o que viola os termos de uso do
-// WhatsApp e não deve ser usado em produção).
+// preenchida, e a pessoa dá o "Enviar" manualmente.
+//
+// Duas formas de deep link, cada uma com uma limitação diferente — não
+// existe opção que resolva as duas coisas ao mesmo tempo, é uma
+// limitação da própria plataforma (não do código):
+//
+// 1) Link direto (api.whatsapp.com/send?phone=...): abre o WhatsApp JÁ
+//    na conversa do contato certo. NÃO consegue anexar arquivo — só
+//    preenche texto.
+// 2) Web Share API (navigator.share com arquivo): consegue anexar o
+//    PDF automaticamente, mas quem escolhe o destino é a folha de
+//    compartilhamento nativa do Android/iOS — ela não recebe qual
+//    contato abrir, só a lista de apps. A pessoa que está enviando
+//    escolhe o contato manualmente depois que o WhatsApp abre.
+//
+// Por isso o app deixa escolher: anexar o S-89 (opção 2, mais lenta
+// pra achar o contato) ou não anexar (opção 1, vai direto no contato
+// certo).
 
-export function limparTelefone(telefone: string): string {
+function limparTelefone(telefone: string): string {
   // remove tudo que não é dígito; assume que o telefone já vem com DDI
   // (ex: 55 11 91234-5678 -> 5511912345678). Se não tiver DDI, assume Brasil.
   const digitos = telefone.replace(/\D/g, "");
@@ -19,27 +32,24 @@ export function limparTelefone(telefone: string): string {
 
 export function montarLinkWhatsapp(telefone: string, mensagem: string): string {
   const numero = limparTelefone(telefone);
-  return `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+  // api.whatsapp.com (em vez de wa.me) é mais confiável abrindo direto
+  // na conversa do contato certo quando chamado de dentro de um PWA/
+  // navegador mobile — wa.me faz um salto de redirecionamento a mais
+  // que às vezes se perde nesse contexto.
+  return `https://api.whatsapp.com/send?phone=${numero}&text=${encodeURIComponent(mensagem)}`;
 }
 
 export function abrirWhatsapp(telefone: string, mensagem: string) {
-  window.open(montarLinkWhatsapp(telefone, mensagem), "_blank");
+  // location.href (em vez de window.open) navega a própria aba —
+  // mais confiável pra disparar o handoff pro app nativo do WhatsApp
+  // quando o site está rodando como PWA instalado.
+  window.location.href = montarLinkWhatsapp(telefone, mensagem);
 }
 
 /**
- * Envia a mensagem já preenchida no WhatsApp COM o PDF anexado, na
- * medida do que o navegador permite:
- *
- * - Onde existe Web Share API com suporte a arquivos (a grande maioria
- *   dos celulares Android/iOS): abre a folha de compartilhamento
- *   nativa já com o PDF e o texto prontos — a pessoa só toca em
- *   WhatsApp na lista e o anexo vai junto. Isso É um anexo automático
- *   de verdade.
- * - Onde não existe (a maioria dos navegadores de computador): não tem
- *   como um site anexar arquivo num chat do WhatsApp Web sozinho — é
- *   bloqueado por segurança do navegador. Nesse caso baixamos o PDF
- *   automaticamente e abrimos o WhatsApp com a mensagem pronta; a
- *   pessoa arrasta o arquivo baixado pro chat que abriu.
+ * Envia a mensagem já preenchida no WhatsApp COM o PDF anexado, através
+ * da folha de compartilhamento nativa (ver limitação [2] no comentário
+ * acima: não mira um contato específico automaticamente).
  *
  * Devolve "compartilhado" | "baixado" pra a tela mostrar a instrução
  * certa pro que de fato aconteceu.
@@ -87,12 +97,20 @@ export function montarMensagemDesignacao(params: {
   nomeEstudante: string;
   tipo: string;
   semana: string;
+  linkConfirmacao?: string;
 }): string {
-  const { mensagemPadrao, nomeEstudante, tipo, semana } = params;
-  return (
+  const { mensagemPadrao, nomeEstudante, tipo, semana, linkConfirmacao } = params;
+  let msg =
     `Olá, ${nomeEstudante}!\n\n` +
     `${mensagemPadrao}\n\n` +
     `Designação: ${tipo}\n` +
-    `Semana: ${semana}`
-  );
+    `Semana: ${semana}`;
+  if (linkConfirmacao) {
+    msg += `\n\nPor favor, confirme sua participação: ${linkConfirmacao}`;
+  }
+  return msg;
+}
+
+export function linkConfirmacao(token: string): string {
+  return `${window.location.origin}${import.meta.env.BASE_URL}confirmar/${token}`;
 }

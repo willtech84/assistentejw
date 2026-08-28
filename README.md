@@ -180,6 +180,40 @@ Depois do deploy, abra o app publicado (`https://<usuário>.github.io/assistente
 Isso vale por navegador/aparelho — quem for testar em outro celular
 precisa ativar de novo lá.
 
+## Confirmação de designação por link (sem login)
+
+Cada designação enviada pelo WhatsApp inclui um link
+`/confirmar/<token>` — a pessoa clica, vê os dados da designação, e
+toca em "Vou fazer" ou "Não vou poder" (podendo sugerir um substituto).
+Não precisa estar logada no app.
+
+Peças envolvidas:
+
+- Migration `0008_confirmacao_designacoes.sql` — adiciona
+  `token_confirmacao` (usado na URL pública, diferente do `id` interno),
+  `confirmacao_status`, `confirmado_em`, `substituto_sugerido`.
+- `supabase/functions/confirmar` — Edge Function pública (sem JWT) que lê
+  e grava só pelo token, usando a service role key — o app nunca abre a
+  tabela `designacoes` inteira pra usuários anônimos.
+- `src/pages/Confirmar.tsx` — tela pública, roteada em `App.tsx` fora da
+  área autenticada.
+- `src/services/whatsapp.ts` (`linkConfirmacao`) — monta o link a partir
+  do token e do domínio atual.
+- `src/services/resumoSemanal.ts` — gera um PDF por semana com quem
+  confirmou, quem não vai poder (e o substituto sugerido, se houver) e
+  quem ainda não respondeu — botão "Baixar resumo de confirmações" em
+  cada grupo de semana na tela de Designações.
+
+Deploy da Edge Function (**precisa da flag `--no-verify-jwt`**, diferente
+da `send-lembretes` — essa aqui é chamada por gente sem login):
+
+```bash
+supabase functions deploy confirmar --no-verify-jwt
+```
+
+E rodar a migration `0008_confirmacao_designacoes.sql` no SQL Editor do
+painel, como as outras.
+
 ## O que ainda é próximo passo (não implementado)
 
 - **Extração de texto de PDF** (identificar automaticamente estudante/tipo

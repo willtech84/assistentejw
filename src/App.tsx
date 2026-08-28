@@ -11,6 +11,7 @@ import Envios from "./pages/Envios";
 import Historico from "./pages/Historico";
 import Configuracoes from "./pages/Configuracoes";
 import Sobre from "./pages/Sobre";
+import Confirmar from "./pages/Confirmar";
 
 function RotasProtegidas() {
   const { user, loading } = useAuth();
@@ -46,7 +47,11 @@ function RotasProtegidas() {
 export default function App() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <RotasProtegidas />
+      <Routes>
+        {/* Pública: o estudante acessa via link do WhatsApp, sem login */}
+        <Route path="confirmar/:token" element={<Confirmar />} />
+        <Route path="*" element={<RotasProtegidas />} />
+      </Routes>
     </BrowserRouter>
   );
 }

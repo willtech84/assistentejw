@@ -76,6 +76,10 @@ export type Designacao = {
   concluida: boolean;
   pdf_enviado: boolean;
   whatsapp_enviado: boolean;
+  token_confirmacao: string;
+  confirmacao_status: string;
+  confirmado_em: string | null;
+  substituto_sugerido: string;
   criado_em: string;
   atualizado_em: string;
 }

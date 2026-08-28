@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Designacao, Configuracoes } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
-import { enviarComAnexo, montarMensagemDesignacao } from "../services/whatsapp";
+import { abrirWhatsapp, enviarComAnexo, linkConfirmacao, montarMensagemDesignacao } from "../services/whatsapp";
 import { gerarS89, nomeArquivoS89 } from "../services/s89";
+import { gerarResumoSemanal, nomeArquivoResumo } from "../services/resumoSemanal";
 import {
   carregarEstudantesDoUsuario,
   type EstudanteBasico,
@@ -16,6 +17,7 @@ export default function Designacoes() {
   const [estudantes, setEstudantes] = useState<EstudanteBasico[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [editando, setEditando] = useState<Partial<Designacao> | null>(null);
+  const [anexarPdf, setAnexarPdf] = useState(true);
 
   async function carregar() {
     setCarregando(true);
@@ -71,11 +73,22 @@ export default function Designacoes() {
     carregar();
   }
 
-  async function marcarEnviada(d: Designacao) {
+  async function marcarEnviada(d: Designacao, telefone: string) {
     await supabase
       .from("designacoes")
       .update({ whatsapp_enviado: true })
       .eq("id", d.id);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await supabase.from("historico_envios").insert({
+      estudante_id: d.estudante_id,
+      estudante: d.estudante,
+      telefone,
+      mensagem: `${d.tipo} — ${d.semana}`,
+      sucesso: true,
+      user_id: user?.id,
+    });
     carregar();
   }
 
@@ -95,6 +108,7 @@ export default function Designacoes() {
       nomeEstudante: d.estudante,
       tipo: d.tipo,
       semana: d.semana,
+      linkConfirmacao: linkConfirmacao(d.token_confirmacao),
     });
 
     // Telefone vem do cadastro via estudante_id (FK) — não mais por
@@ -113,31 +127,41 @@ export default function Designacoes() {
       return;
     }
 
-    try {
-      const pdfBytes = await gerarS89(d);
-      const resultado = await enviarComAnexo(
-        estudante.telefone,
-        mensagem,
-        pdfBytes,
-        nomeArquivoS89(d)
-      );
-      if (resultado === "baixado") {
-        alert(
-          "O S-89 preenchido foi baixado e o WhatsApp abriu com a mensagem pronta — " +
-            "arraste o arquivo baixado pro chat que abriu para anexar."
+    if (anexarPdf) {
+      try {
+        const pdfBytes = await gerarS89(d);
+        const resultado = await enviarComAnexo(
+          estudante.telefone,
+          mensagem,
+          pdfBytes,
+          nomeArquivoS89(d)
         );
-      }
-    } catch (err) {
-      if ((err as Error)?.name === "AbortError") return; // cancelou a folha de compartilhamento
-      alert(`Não foi possível gerar o S-89: ${(err as Error).message}`);
-      return;
-    }
-    if (config?.confirmar_antes_enviar !== false) {
-      if (confirm("Marcar esta designação como enviada?")) {
-        await marcarEnviada(d);
+        if (resultado === "baixado") {
+          alert(
+            "O S-89 preenchido foi baixado e o WhatsApp abriu, mas sem mirar o contato certo " +
+              "(limitação da folha de compartilhamento) — escolha o contato e arraste o arquivo pro chat."
+          );
+        } else {
+          alert(
+            "O WhatsApp abriu pra você escolher o contato (a folha de compartilhamento não sabe " +
+              "abrir direto na conversa) — escolha o contato certo pra anexar o S-89."
+          );
+        }
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return; // cancelou a folha de compartilhamento
+        alert(`Não foi possível gerar o S-89: ${(err as Error).message}`);
+        return;
       }
     } else {
-      await marcarEnviada(d);
+      abrirWhatsapp(estudante.telefone, mensagem);
+    }
+
+    if (config?.confirmar_antes_enviar !== false) {
+      if (confirm("Marcar esta designação como enviada?")) {
+        await marcarEnviada(d, estudante.telefone);
+      }
+    } else {
+      await marcarEnviada(d, estudante.telefone);
     }
   }
 
@@ -160,6 +184,17 @@ export default function Designacoes() {
     if (!user) return;
     await supabase.from("designacoes").delete().eq("user_id", user.id);
     carregar();
+  }
+
+  async function baixarResumoSemana(semana: string, itens: Designacao[]) {
+    const pdfBytes = await gerarResumoSemanal(itens, semana || "sem nome");
+    const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nomeArquivoResumo(semana || "semana");
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   const porSemana = agrupar(lista);
@@ -188,6 +223,23 @@ export default function Designacoes() {
         }
       />
 
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 md:px-6">
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={anexarPdf}
+            onChange={(e) => setAnexarPdf(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          Anexar S-89 ao enviar
+        </label>
+        <span className="text-xs text-slate-400">
+          {anexarPdf
+            ? "— abre a folha de compartilhar; você escolhe o contato"
+            : "— abre direto na conversa do contato, sem anexo"}
+        </span>
+      </div>
+
       <div className="space-y-6 p-4 md:p-6">
         {carregando ? (
           <p className="text-sm text-slate-500">Carregando...</p>
@@ -199,13 +251,21 @@ export default function Designacoes() {
         ) : (
           Object.entries(porSemana).map(([semana, itens]) => (
             <div key={semana}>
-              <h2 className="mb-2 text-sm font-semibold text-slate-500">
-                {new Date(itens[0].data_reuniao + "T00:00:00").toLocaleDateString(
-                  "pt-BR",
-                  { weekday: "long", day: "2-digit", month: "long" }
-                )}
-                {semana ? ` — ${semana}` : ""}
-              </h2>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-500">
+                  {new Date(itens[0].data_reuniao + "T00:00:00").toLocaleDateString(
+                    "pt-BR",
+                    { weekday: "long", day: "2-digit", month: "long" }
+                  )}
+                  {semana ? ` — ${semana}` : ""}
+                </h2>
+                <button
+                  onClick={() => baixarResumoSemana(semana, itens)}
+                  className="text-xs text-indigo-600 hover:underline"
+                >
+                  Baixar resumo de confirmações
+                </button>
+              </div>
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 {itens.map((d) => (
                   <div
@@ -227,8 +287,30 @@ export default function Designacoes() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {d.whatsapp_enviado && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${
+                            d.confirmacao_status === "confirmado"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : d.confirmacao_status === "recusado"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-amber-100 text-amber-700"
+                          }`}
+                          title={
+                            d.confirmacao_status === "recusado" && d.substituto_sugerido
+                              ? `Substituto sugerido: ${d.substituto_sugerido}`
+                              : undefined
+                          }
+                        >
+                          {d.confirmacao_status === "confirmado"
+                            ? "✅ Confirmado"
+                            : d.confirmacao_status === "recusado"
+                              ? "❌ Não vai poder"
+                              : "⏳ Aguardando"}
+                        </span>
+                      )}
                       {d.whatsapp_enviado ? (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
                           Enviado
                         </span>
                       ) : (

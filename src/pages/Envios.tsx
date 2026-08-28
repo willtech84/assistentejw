@@ -2,13 +2,19 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Designacao, Configuracoes } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
-import { enviarComAnexo, montarMensagemDesignacao } from "../services/whatsapp";
+import {
+  abrirWhatsapp,
+  enviarComAnexo,
+  linkConfirmacao,
+  montarMensagemDesignacao,
+} from "../services/whatsapp";
 import { gerarS89, nomeArquivoS89 } from "../services/s89";
 
 export default function Envios() {
   const [pendentes, setPendentes] = useState<Designacao[]>([]);
   const [config, setConfig] = useState<Configuracoes | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [anexarPdf, setAnexarPdf] = useState(true);
 
   async function carregar() {
     setCarregando(true);
@@ -54,26 +60,36 @@ export default function Envios() {
       nomeEstudante: d.estudante,
       tipo: d.tipo,
       semana: d.semana,
+      linkConfirmacao: linkConfirmacao(d.token_confirmacao),
     });
 
-    try {
-      const pdfBytes = await gerarS89(d);
-      const resultado = await enviarComAnexo(
-        estudante.telefone,
-        mensagem,
-        pdfBytes,
-        nomeArquivoS89(d)
-      );
-      if (resultado === "baixado") {
-        alert(
-          "O S-89 preenchido foi baixado e o WhatsApp abriu com a mensagem pronta — " +
-            "arraste o arquivo baixado pro chat que abriu para anexar."
+    if (anexarPdf) {
+      try {
+        const pdfBytes = await gerarS89(d);
+        const resultado = await enviarComAnexo(
+          estudante.telefone,
+          mensagem,
+          pdfBytes,
+          nomeArquivoS89(d)
         );
+        if (resultado === "baixado") {
+          alert(
+            "O S-89 preenchido foi baixado e o WhatsApp abriu, mas sem mirar o contato certo " +
+              "(limitação da folha de compartilhamento) — escolha o contato e arraste o arquivo pro chat."
+          );
+        } else {
+          alert(
+            "O WhatsApp abriu pra você escolher o contato (a folha de compartilhamento não sabe " +
+              "abrir direto na conversa) — escolha o contato certo pra anexar o S-89."
+          );
+        }
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return; // cancelou a folha de compartilhamento
+        alert(`Não foi possível gerar o S-89: ${(err as Error).message}`);
+        return;
       }
-    } catch (err) {
-      if ((err as Error)?.name === "AbortError") return; // cancelou a folha de compartilhamento
-      alert(`Não foi possível gerar o S-89: ${(err as Error).message}`);
-      return;
+    } else {
+      abrirWhatsapp(estudante.telefone, mensagem);
     }
 
     await supabase.from("designacoes").update({ whatsapp_enviado: true }).eq("id", d.id);
@@ -92,6 +108,22 @@ export default function Envios() {
   return (
     <div>
       <PageHeader title="Fila de Envios" />
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 md:px-6">
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={anexarPdf}
+            onChange={(e) => setAnexarPdf(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          Anexar S-89 ao enviar
+        </label>
+        <span className="text-xs text-slate-400">
+          {anexarPdf
+            ? "— abre a folha de compartilhar; você escolhe o contato"
+            : "— abre direto na conversa do contato, sem anexo"}
+        </span>
+      </div>
       <div className="p-4 md:p-6">
         <p className="mb-4 text-sm text-slate-500">
           Cada envio abre o WhatsApp com a mensagem pronta — confirme e clique

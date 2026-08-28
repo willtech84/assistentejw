@@ -14,15 +14,28 @@
 // S-140 reais):
 //   B = hora / data do bloco da semana
 //   D = descrição da parte (ex: "3. Leitura da Bíblia (4 min.)")
-//   F = rótulo ("Estudante:" ou "Estudante/Ajudante:") — só linhas com
-//       esse rótulo são designações de estudante; partes lideradas por
-//       anciãos/servos ministeriais (Presidente, Oração, Dirigente,
-//       Estudo Bíblico de Congregação) usam outros rótulos/colunas e
-//       são ignoradas de propósito, porque não são "designações" que
-//       este app manda por WhatsApp
+//   F = rótulo de estudante ("Estudante:" ou "Estudante/Ajudante:")
 //   G = nome na Sala C
 //   I = nome na Sala B
 //   K = nome no Salão principal
+//   J = rótulo administrativo ("Presidente:", "Oração:", "Dirigente da
+//       sala B/C:", "Dirigente/Leitor:" do Estudo Bíblico) — essas
+//       partes não têm S-89 (não são designações de estudante), mas o
+//       usuário quer poder mandar lembrete/mensagem pra elas também,
+//       então também viram designações — só que sem numero_parte
+//       (o S-89 não seria preenchido pra essas mesmo se pedido).
+//
+// Nem toda linha com nome em G/I/K tem um rótulo (F ou J) — as partes
+// de discurso lideradas por publicadores/anciãos (ex: "Joias
+// espirituais", "Use seu tempo da melhor forma...") só têm a
+// descrição em D e o nome direto em K, sem rótulo nenhum. Nesses
+// casos o próprio texto de D vira o "tipo".
+//
+// Um detalhe: quando há rótulo em J (administrativo) a coluna D às
+// vezes contém apenas o texto de um Cântico que por acaso está na
+// mesma linha da Oração (ex: "Cântico 143" na linha da "Oração:" de
+// encerramento) — nesse caso o rótulo é mais confiável que D, então
+// D só é usado como tipo quando não é um Cântico.
 //
 // Um placeholder de planilha em branco (linha ainda não preenchida)
 // aparece como "Nome", "Nome/Nome" ou "[Tema]" — essas linhas são
@@ -40,9 +53,10 @@ export interface LinhaImportada {
 
 const COL_DATA_BLOCO = 2; // B
 const COL_DESCRICAO = 4; // D
-const COL_ROTULO = 6; // F
+const COL_ROTULO_ESTUDANTE = 6; // F
 const COL_SALA_C = 7; // G
 const COL_SALA_B = 9; // I
+const COL_LABEL_ADMIN = 10; // J
 const COL_SALAO_PRINCIPAL = 11; // K
 
 const PLACEHOLDERS = new Set(["nome", "nome/nome", "[tema]"]);
@@ -94,12 +108,32 @@ function processarLinhasDeDesignacao(
   const semana = nomeDaSemana(dataAtual);
 
   for (let r = linhaInicio; r <= linhaFim; r++) {
-    const rotulo = celulaTexto(ws, XLSX, r, COL_ROTULO).toLowerCase();
-    if (!rotulo.startsWith("estudante")) continue;
+    const rotuloEstudante = celulaTexto(ws, XLSX, r, COL_ROTULO_ESTUDANTE);
+    const rotuloAdmin = celulaTexto(ws, XLSX, r, COL_LABEL_ADMIN);
+    const rotulo = rotuloEstudante || rotuloAdmin;
+    const rotuloLower = rotulo.toLowerCase();
+    if (!rotulo) {
+      // sem rótulo — só processa se houver descrição real em D (partes
+      // de discurso, sem estudante nem cargo administrativo formal)
+      const descricaoBruta = celulaTexto(ws, XLSX, r, COL_DESCRICAO);
+      if (!descricaoBruta || /^cântico/i.test(descricaoBruta)) continue;
+    }
 
     const descricao = celulaTexto(ws, XLSX, r, COL_DESCRICAO);
-    const { numero, tipo } = extrairNumeroEParte(descricao);
-    const temAjudante = rotulo.includes("ajudante");
+    const usaDescricao = descricao && !/^cântico/i.test(descricao);
+    const { numero, tipo: tipoDaDescricao } = usaDescricao
+      ? extrairNumeroEParte(descricao)
+      : { numero: "", tipo: "" };
+    const tipo = tipoDaDescricao || rotulo.replace(/:$/, "").trim();
+    if (!tipo) continue;
+
+    // sala: prioridade pro que o próprio rótulo diz ("sala B"/"sala C"),
+    // senão pela coluna onde o nome apareceu
+    const salaPorRotulo = rotuloLower.includes("sala b")
+      ? "B"
+      : rotuloLower.includes("sala c")
+        ? "C"
+        : null;
 
     const colunasPorSala: [string, number][] = [
       ["C", COL_SALA_C],
@@ -107,13 +141,13 @@ function processarLinhasDeDesignacao(
       ["Principal", COL_SALAO_PRINCIPAL],
     ];
 
-    for (const [sala, col] of colunasPorSala) {
+    for (const [salaColuna, col] of colunasPorSala) {
       const valor = celulaTexto(ws, XLSX, r, col);
       if (ehPlaceholder(valor)) continue;
 
       let estudante = valor;
       let ajudante = "";
-      if (temAjudante && valor.includes("/")) {
+      if (valor.includes("/")) {
         const [a, b] = valor.split("/");
         estudante = a.trim();
         ajudante = (b ?? "").trim();
@@ -125,7 +159,7 @@ function processarLinhasDeDesignacao(
         numero_parte: numero,
         estudante,
         ajudante,
-        sala,
+        sala: salaPorRotulo ?? salaColuna,
         semana,
       });
     }
