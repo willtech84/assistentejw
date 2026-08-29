@@ -74,7 +74,7 @@ export async function gerarResumoSemanal(
       novaLinha(18);
     }
     for (const d of itens) {
-      texto(`•  ${linhaDesignacao(d)}`, { tamanho: 10.5 });
+      texto(`-  ${linhaDesignacao(d)}`, { tamanho: 10.5 });
       novaLinha(15);
       if (d.confirmacao_status === "recusado" && d.substituto_sugerido) {
         texto(`   Substituto sugerido: ${d.substituto_sugerido}`, {
@@ -87,9 +87,9 @@ export async function gerarResumoSemanal(
     novaLinha(10);
   }
 
-  secao("✅ Confirmaram", confirmados, [0.05, 0.45, 0.25]);
-  secao("❌ Não vão poder", recusados, [0.6, 0.1, 0.1]);
-  secao("⏳ Ainda sem resposta", pendentes, [0.5, 0.4, 0]);
+  secao("Confirmaram", confirmados, [0.05, 0.45, 0.25]);
+  secao("Não vão poder", recusados, [0.6, 0.1, 0.1]);
+  secao("Ainda sem resposta", pendentes, [0.5, 0.4, 0]);
 
   return pdf.save();
 }

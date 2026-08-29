@@ -187,14 +187,18 @@ export default function Designacoes() {
   }
 
   async function baixarResumoSemana(semana: string, itens: Designacao[]) {
-    const pdfBytes = await gerarResumoSemanal(itens, semana || "sem nome");
-    const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = nomeArquivoResumo(semana || "semana");
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      const pdfBytes = await gerarResumoSemanal(itens, semana || "sem nome");
+      const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = nomeArquivoResumo(semana || "semana");
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Não foi possível gerar o resumo: ${(err as Error).message}`);
+    }
   }
 
   const porSemana = agrupar(lista);
@@ -310,9 +314,12 @@ export default function Designacoes() {
                         </span>
                       )}
                       {d.whatsapp_enviado ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                          Enviado
-                        </span>
+                        <button
+                          onClick={() => enviar(d)}
+                          className="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                        >
+                          Reenviar
+                        </button>
                       ) : (
                         <button
                           onClick={() => enviar(d)}
@@ -363,7 +370,7 @@ export default function Designacoes() {
                 onChange={(e) =>
                   setEditando({ ...editando, data_reuniao: e.target.value })
                 }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
               />
             </div>
 
@@ -377,7 +384,7 @@ export default function Designacoes() {
                 onChange={(e) =>
                   setEditando({ ...editando, tipo: e.target.value })
                 }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
               >
                 <option value="" disabled>
                   Selecione...
@@ -400,7 +407,7 @@ export default function Designacoes() {
                 onChange={(e) =>
                   setEditando({ ...editando, estudante_id: e.target.value || null })
                 }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
               >
                 <option value="" disabled>
                   Selecione...
@@ -437,7 +444,7 @@ export default function Designacoes() {
                 onChange={(e) =>
                   setEditando({ ...editando, sala: e.target.value })
                 }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
               >
                 <option value="Principal">Salão principal</option>
                 <option value="B">Sala B</option>
@@ -500,7 +507,7 @@ function Campo({
         value={value}
         required={required}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
       />
     </div>
   );

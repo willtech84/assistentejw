@@ -137,7 +137,7 @@ export default function Confirmar() {
                   value={substituto}
                   onChange={(e) => setSubstituto(e.target.value)}
                   placeholder="Nome do substituto"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
                 />
               </div>
             )}
