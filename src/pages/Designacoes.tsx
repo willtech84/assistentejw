@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import type { Designacao, Configuracoes } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
 import { abrirWhatsapp, enviarComAnexo, linkConfirmacao, montarMensagemDesignacao } from "../services/whatsapp";
-import { gerarS89, nomeArquivoS89 } from "../services/s89";
+import { gerarS89, nomeArquivoS89, ehParteDeEstudante } from "../services/s89";
 import { gerarResumoSemanal, nomeArquivoResumo } from "../services/resumoSemanal";
 import {
   carregarEstudantesDoUsuario,
@@ -18,6 +18,7 @@ export default function Designacoes() {
   const [carregando, setCarregando] = useState(true);
   const [editando, setEditando] = useState<Partial<Designacao> | null>(null);
   const [anexarPdf, setAnexarPdf] = useState(true);
+  const [filtroData, setFiltroData] = useState("");
 
   async function carregar() {
     setCarregando(true);
@@ -127,7 +128,7 @@ export default function Designacoes() {
       return;
     }
 
-    if (anexarPdf) {
+    if (anexarPdf && ehParteDeEstudante(d.tipo)) {
       try {
         const pdfBytes = await gerarS89(d);
         const resultado = await enviarComAnexo(
@@ -201,7 +202,18 @@ export default function Designacoes() {
     }
   }
 
-  const porSemana = agrupar(lista);
+  const datasDisponiveis = Array.from(new Set(lista.map((d) => d.data_reuniao)))
+    .sort()
+    .map((data) => ({
+      data,
+      semana: lista.find((d) => d.data_reuniao === data)?.semana ?? "",
+    }));
+
+  const listaFiltrada = filtroData
+    ? lista.filter((d) => d.data_reuniao === filtroData)
+    : lista;
+
+  const porSemana = agrupar(listaFiltrada);
 
   return (
     <div>
@@ -242,6 +254,19 @@ export default function Designacoes() {
             ? "— abre a folha de compartilhar; você escolhe o contato"
             : "— abre direto na conversa do contato, sem anexo"}
         </span>
+        <select
+          value={filtroData}
+          onChange={(e) => setFiltroData(e.target.value)}
+          className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700"
+        >
+          <option value="">Todas as semanas</option>
+          {datasDisponiveis.map(({ data, semana }) => (
+            <option key={data} value={data}>
+              {new Date(data + "T00:00:00").toLocaleDateString("pt-BR")}
+              {semana ? ` — ${semana}` : ""}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="space-y-6 p-4 md:p-6">

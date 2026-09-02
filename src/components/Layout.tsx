@@ -8,6 +8,7 @@ const ITENS = [
   { to: "/estudantes", label: "Estudantes", icone: "👥" },
   { to: "/pdfs", label: "PDFs", icone: "📄" },
   { to: "/envios", label: "Envios", icone: "💬" },
+  { to: "/disparo", label: "Disparo", icone: "📣" },
   { to: "/historico", label: "Histórico", icone: "🕓" },
   { to: "/configuracoes", label: "Configurações", icone: "⚙️" },
 ];
@@ -50,15 +51,16 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* navegação inferior no mobile */}
-      <nav className="fixed inset-x-0 bottom-0 z-10 flex justify-around border-t border-slate-200 bg-white py-2 md:hidden">
-        {ITENS.slice(0, 5).map((item) => (
+      {/* navegação inferior no mobile — rolável horizontalmente pra
+          caber todos os itens, já que a barra lateral fica escondida */}
+      <nav className="fixed inset-x-0 bottom-0 z-10 flex overflow-x-auto border-t border-slate-200 bg-white py-2 md:hidden">
+        {ITENS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.fim}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-2 text-xs ${
+              `flex flex-shrink-0 flex-col items-center gap-0.5 px-3 text-xs ${
                 isActive ? "text-indigo-700" : "text-slate-500"
               }`
             }

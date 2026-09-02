@@ -8,7 +8,7 @@ import {
   linkConfirmacao,
   montarMensagemDesignacao,
 } from "../services/whatsapp";
-import { gerarS89, nomeArquivoS89 } from "../services/s89";
+import { gerarS89, nomeArquivoS89, ehParteDeEstudante } from "../services/s89";
 
 export default function Envios() {
   const [pendentes, setPendentes] = useState<Designacao[]>([]);
@@ -63,7 +63,7 @@ export default function Envios() {
       linkConfirmacao: linkConfirmacao(d.token_confirmacao),
     });
 
-    if (anexarPdf) {
+    if (anexarPdf && ehParteDeEstudante(d.tipo)) {
       try {
         const pdfBytes = await gerarS89(d);
         const resultado = await enviarComAnexo(

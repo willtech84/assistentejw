@@ -8,6 +8,7 @@ import Agenda from "./pages/Agenda";
 import Estudantes from "./pages/Estudantes";
 import Pdfs from "./pages/Pdfs";
 import Envios from "./pages/Envios";
+import Disparo from "./pages/Disparo";
 import Historico from "./pages/Historico";
 import Configuracoes from "./pages/Configuracoes";
 import Sobre from "./pages/Sobre";
@@ -35,6 +36,7 @@ function RotasProtegidas() {
         <Route path="estudantes" element={<Estudantes />} />
         <Route path="pdfs" element={<Pdfs />} />
         <Route path="envios" element={<Envios />} />
+        <Route path="disparo" element={<Disparo />} />
         <Route path="historico" element={<Historico />} />
         <Route path="configuracoes" element={<Configuracoes />} />
         <Route path="sobre" element={<Sobre />} />

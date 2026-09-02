@@ -5,6 +5,7 @@ import PageHeader from "../components/PageHeader";
 
 interface Resumo {
   proximaReuniao: string | null;
+  proximaSemana: string | null;
   designacoesPendentes: number;
   totalEstudantes: number;
 }
@@ -19,10 +20,10 @@ export default function Home() {
       const [{ data: proxima }, { count: pendentes }, { count: estudantes }] =
         await Promise.all([
           supabase
-            .from("reunioes")
-            .select("data")
-            .gte("data", hoje)
-            .order("data", { ascending: true })
+            .from("designacoes")
+            .select("data_reuniao, semana")
+            .gte("data_reuniao", hoje)
+            .order("data_reuniao", { ascending: true })
             .limit(1)
             .maybeSingle(),
           supabase
@@ -36,7 +37,8 @@ export default function Home() {
         ]);
 
       setResumo({
-        proximaReuniao: proxima?.data ?? null,
+        proximaReuniao: proxima?.data_reuniao ?? null,
+        proximaSemana: proxima?.semana ?? null,
         designacoesPendentes: pendentes ?? 0,
         totalEstudantes: estudantes ?? 0,
       });
@@ -55,7 +57,8 @@ export default function Home() {
               ? new Date(resumo.proximaReuniao + "T00:00:00").toLocaleDateString("pt-BR")
               : "—"
           }
-          link="/agenda"
+          subtitulo={resumo?.proximaSemana ? `Semana: ${resumo.proximaSemana}` : undefined}
+          link="/designacoes"
         />
         <Cartao
           titulo="Designações pendentes de envio"
@@ -75,10 +78,12 @@ export default function Home() {
 function Cartao({
   titulo,
   valor,
+  subtitulo,
   link,
 }: {
   titulo: string;
   valor: string;
+  subtitulo?: string;
   link: string;
 }) {
   return (
@@ -88,6 +93,7 @@ function Cartao({
     >
       <p className="text-sm text-slate-500">{titulo}</p>
       <p className="mt-2 text-2xl font-semibold text-slate-900">{valor}</p>
+      {subtitulo && <p className="mt-1 text-xs text-slate-400">{subtitulo}</p>}
     </Link>
   );
 }

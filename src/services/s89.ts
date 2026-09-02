@@ -78,3 +78,25 @@ export function nomeArquivoS89(designacao: Designacao): string {
     designacao.data_reuniao
   ).replace(/\//g, "-")}.pdf`;
 }
+
+// Só as partes do Ministério que o próprio estudante realiza usam o
+// molde S-89 de verdade. Presidente, Oração, Dirigentes, Estudo
+// Bíblico de Congregação e discursos (feitos por publicadores/anciãos)
+// não são designações desse tipo — pra essas, o app manda só a
+// mensagem de lembrete, sem anexar nada, mesmo que o toggle "Anexar
+// S-89" esteja marcado.
+const PARTES_DE_ESTUDANTE = [
+  "leitura da bíblia",
+  "iniciando conversas",
+  "cultivando o interesse",
+  "fazendo discípulos",
+  "explicando suas crenças",
+  "primeira conversa",
+  "revisita",
+  "curso bíblico",
+];
+
+export function ehParteDeEstudante(tipo: string): boolean {
+  const t = tipo.toLowerCase();
+  return PARTES_DE_ESTUDANTE.some((p) => t.includes(p));
+}
