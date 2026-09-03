@@ -8,6 +8,13 @@ import { useParams } from "react-router-dom";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirmar`;
 
+// O gateway do Supabase (sistema novo de chaves "publishable"/"secret")
+// exige uma apikey em toda chamada — mesmo pra Edge Functions públicas
+// com verificação de JWT desligada. A chave pública (mesma usada pelo
+// resto do app) é segura de embutir no front-end.
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const HEADERS_BASE = { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` };
+
 interface DadosDesignacao {
   estudante: string;
   ajudante: string;
@@ -33,14 +40,22 @@ export default function Confirmar() {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${FUNCTIONS_URL}?token=${encodeURIComponent(token)}`)
-      .then((r) => r.json())
+    fetch(`${FUNCTIONS_URL}?token=${encodeURIComponent(token)}`, {
+      headers: HEADERS_BASE,
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const texto = await r.text().catch(() => "");
+          throw new Error(`HTTP ${r.status}${texto ? `: ${texto.slice(0, 200)}` : ""}`);
+        }
+        return r.json();
+      })
       .then((json) => {
         if (json.error) {
           setErro(
             json.error === "não encontrado"
               ? "Link inválido ou expirado."
-              : "Não foi possível carregar essa designação."
+              : `Não foi possível carregar essa designação (${json.error}).`
           );
         } else {
           setDados(json.designacao);
@@ -49,7 +64,13 @@ export default function Confirmar() {
           }
         }
       })
-      .catch(() => setErro("Não foi possível conectar. Verifique sua internet."))
+      .catch((e) =>
+        setErro(
+          `Não foi possível conectar ao servidor de confirmação. Detalhe técnico: ${
+            (e as Error).message
+          }`
+        )
+      )
       .finally(() => setCarregando(false));
   }, [token]);
 
@@ -62,17 +83,25 @@ export default function Confirmar() {
     try {
       const r = await fetch(FUNCTIONS_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...HEADERS_BASE },
         body: JSON.stringify({ token, status, substituto }),
       });
+      if (!r.ok) {
+        const texto = await r.text().catch(() => "");
+        throw new Error(`HTTP ${r.status}${texto ? `: ${texto.slice(0, 200)}` : ""}`);
+      }
       const json = await r.json();
       if (json.error) {
-        setErro("Não foi possível registrar sua resposta. Tente novamente.");
+        setErro(`Não foi possível registrar sua resposta (${json.error}).`);
       } else {
         setConcluido(status);
       }
-    } catch {
-      setErro("Não foi possível conectar. Verifique sua internet.");
+    } catch (e) {
+      setErro(
+        `Não foi possível conectar ao servidor de confirmação. Detalhe técnico: ${
+          (e as Error).message
+        }`
+      );
     } finally {
       setEnviando(false);
     }

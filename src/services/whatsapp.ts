@@ -106,7 +106,7 @@ export function montarMensagemDesignacao(params: {
     `Designação: ${tipo}\n` +
     `Semana: ${semana}`;
   if (linkConfirmacao) {
-    msg += `\n\nPor favor, confirme sua participação: ${linkConfirmacao}`;
+    msg += `\n\n👉 Clique no link para confirmar sua participação: ${linkConfirmacao}`;
   }
   return msg;
 }
