@@ -20,7 +20,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type",
+  "Access-Control-Allow-Headers": "content-type, apikey, authorization, x-client-info",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
