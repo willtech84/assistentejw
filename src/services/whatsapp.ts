@@ -70,6 +70,16 @@ export async function enviarComAnexo(
     navigator.canShare({ files: [arquivo] })
   ) {
     try {
+      // Rede de segurança: o WhatsApp às vezes descarta o campo "text"
+      // quando recebe arquivo + texto juntos por aqui (comportamento
+      // do próprio app, fora do nosso controle) — copia a mensagem
+      // pra área de transferência também, pra dar pra colar manualmente
+      // se ela não vier junto.
+      try {
+        await navigator.clipboard.writeText(mensagem);
+      } catch {
+        // clipboard pode falhar por permissão — não é crítico, segue o jogo
+      }
       await navigator.share({ files: [arquivo], text: mensagem });
       return "compartilhado";
     } catch (err) {

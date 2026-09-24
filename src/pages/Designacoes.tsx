@@ -145,7 +145,8 @@ export default function Designacoes() {
         } else {
           alert(
             "O WhatsApp abriu pra você escolher o contato (a folha de compartilhamento não sabe " +
-              "abrir direto na conversa) — escolha o contato certo pra anexar o S-89."
+              "abrir direto na conversa) — escolha o contato certo pra anexar o S-89. " +
+              "A mensagem também foi copiada — se ela não aparecer sozinha no chat, é só colar."
           );
         }
       } catch (err) {
