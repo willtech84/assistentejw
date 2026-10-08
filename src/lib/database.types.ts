@@ -21,6 +21,8 @@ export type Configuracoes = {
   pasta_backup: string;
   telefone_padrao: string;
   mensagem_padrao: string;
+  mensagem_designacao_outras: string;
+  mensagem_confirmacao_outras: string;
   criado_em: string;
   atualizado_em: string;
 }

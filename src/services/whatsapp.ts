@@ -121,6 +121,36 @@ export function montarMensagemDesignacao(params: {
   return msg;
 }
 
+// Para partes que NÃO são de estudante (Presidente, Oração, Dirigentes,
+// Estudo Bíblico, discursos) — essas nunca usam S-89 e têm 2 envios
+// separados: o aviso da designação e, depois, o lembrete de
+// confirmação. O texto vem de Configurações (mensagem_designacao_outras
+// / mensagem_confirmacao_outras), com {tipo} e {semana} substituídos.
+function substituirVariaveis(
+  modelo: string,
+  vars: { tipo: string; semana: string; nomeEstudante: string }
+): string {
+  return modelo
+    .replace(/\{tipo\}/gi, vars.tipo)
+    .replace(/\{semana\}/gi, vars.semana)
+    .replace(/\{nome\}/gi, vars.nomeEstudante.split(" ")[0]);
+}
+
+export function montarMensagemDesignacaoOutras(params: {
+  modelo: string;
+  nomeEstudante: string;
+  tipo: string;
+  semana: string;
+  linkConfirmacao?: string;
+}): string {
+  const { modelo, linkConfirmacao, ...vars } = params;
+  let msg = substituirVariaveis(modelo, vars);
+  if (linkConfirmacao) {
+    msg += `\n\n👉 Clique no link para confirmar sua participação: ${linkConfirmacao}`;
+  }
+  return msg;
+}
+
 export function linkConfirmacao(token: string): string {
   return `${window.location.origin}${import.meta.env.BASE_URL}confirmar/${token}`;
 }

@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Designacao, Configuracoes } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
-import { abrirWhatsapp, enviarComAnexo, linkConfirmacao, montarMensagemDesignacao } from "../services/whatsapp";
+import {
+  abrirWhatsapp,
+  enviarComAnexo,
+  linkConfirmacao,
+  montarMensagemDesignacao,
+  montarMensagemDesignacaoOutras,
+} from "../services/whatsapp";
 import { gerarS89, nomeArquivoS89, ehParteDeEstudante } from "../services/s89";
 import { gerarResumoSemanal, nomeArquivoResumo } from "../services/resumoSemanal";
 import {
@@ -165,6 +171,80 @@ export default function Designacoes() {
     } else {
       await marcarEnviada(d, estudante.telefone);
     }
+  }
+
+  // Partes sem S-89 (Presidente, Oração, Dirigentes, Estudo Bíblico,
+  // discursos) têm 2 envios separados: o aviso da designação (marca
+  // como enviado, igual enviar()) e, depois, um lembrete de
+  // confirmação à parte — que NÃO mexe no status de enviado, só
+  // registra no histórico, porque é um lembrete extra, não o envio
+  // original.
+  async function buscarTelefone(d: Designacao): Promise<string | null> {
+    if (!d.estudante_id) {
+      alert(
+        `"${d.estudante}" não está vinculado a um estudante cadastrado. ` +
+          `Edite esta designação e selecione o estudante na lista antes de enviar.`
+      );
+      return null;
+    }
+    const { data: estudante } = await supabase
+      .from("estudantes")
+      .select("telefone")
+      .eq("id", d.estudante_id)
+      .maybeSingle();
+    if (!estudante?.telefone) {
+      alert(`Telefone de "${d.estudante}" não encontrado no cadastro de estudantes.`);
+      return null;
+    }
+    return estudante.telefone;
+  }
+
+  async function enviarDesignacaoOutras(d: Designacao) {
+    const telefone = await buscarTelefone(d);
+    if (!telefone) return;
+
+    const mensagem = montarMensagemDesignacaoOutras({
+      modelo: config?.mensagem_designacao_outras ?? "",
+      nomeEstudante: d.estudante,
+      tipo: d.tipo,
+      semana: d.semana,
+      linkConfirmacao: linkConfirmacao(d.token_confirmacao),
+    });
+    abrirWhatsapp(telefone, mensagem);
+
+    if (config?.confirmar_antes_enviar !== false) {
+      if (confirm("Marcar esta designação como enviada?")) {
+        await marcarEnviada(d, telefone);
+      }
+    } else {
+      await marcarEnviada(d, telefone);
+    }
+  }
+
+  async function enviarConfirmacaoOutras(d: Designacao) {
+    const telefone = await buscarTelefone(d);
+    if (!telefone) return;
+
+    const mensagem = montarMensagemDesignacaoOutras({
+      modelo: config?.mensagem_confirmacao_outras ?? "",
+      nomeEstudante: d.estudante,
+      tipo: d.tipo,
+      semana: d.semana,
+      linkConfirmacao: linkConfirmacao(d.token_confirmacao),
+    });
+    abrirWhatsapp(telefone, mensagem);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await supabase.from("historico_envios").insert({
+      estudante_id: d.estudante_id,
+      estudante: d.estudante,
+      telefone,
+      mensagem: `Lembrete de confirmação — ${d.tipo} — ${d.semana}`,
+      sucesso: true,
+      user_id: user?.id,
+    });
   }
 
   async function excluir(d: Designacao) {
@@ -339,20 +419,41 @@ export default function Designacoes() {
                               : "⏳ Aguardando"}
                         </span>
                       )}
-                      {d.whatsapp_enviado ? (
-                        <button
-                          onClick={() => enviar(d)}
-                          className="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
-                        >
-                          Reenviar
-                        </button>
+                      {ehParteDeEstudante(d.tipo) ? (
+                        d.whatsapp_enviado ? (
+                          <button
+                            onClick={() => enviar(d)}
+                            className="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                          >
+                            Reenviar
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => enviar(d)}
+                            className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                          >
+                            Enviar WhatsApp
+                          </button>
+                        )
                       ) : (
-                        <button
-                          onClick={() => enviar(d)}
-                          className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700"
-                        >
-                          Enviar WhatsApp
-                        </button>
+                        <>
+                          <button
+                            onClick={() => enviarDesignacaoOutras(d)}
+                            className={
+                              d.whatsapp_enviado
+                                ? "rounded-lg border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                                : "rounded-lg bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                            }
+                          >
+                            {d.whatsapp_enviado ? "Reenviar designação" : "Enviar designação"}
+                          </button>
+                          <button
+                            onClick={() => enviarConfirmacaoOutras(d)}
+                            className="rounded-lg border border-indigo-200 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                          >
+                            Pedir confirmação
+                          </button>
+                        </>
                       )}
                       <button
                         onClick={() => setEditando(d)}

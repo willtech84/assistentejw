@@ -40,6 +40,24 @@ export function statusPermissao(): NotificationPermission | "indisponivel" {
 }
 
 /**
+ * Permissão concedida não é o mesmo que ter uma inscrição de push
+ * ATIVA — ela pode ter se perdido (ex: o service worker atualizou) e
+ * nesse caso é preciso criar uma nova, mesmo com a permissão já
+ * concedida. Usar isso pra decidir se mostra "Ativar" ou "Desativar"
+ * na tela, em vez de só checar a permissão.
+ */
+export async function temInscricaoAtiva(): Promise<boolean> {
+  if (!suportaPush()) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    return subscription !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pede permissão ao usuário (se ainda não decidida), cria a subscription
  * de push no navegador e salva/atualiza no Supabase.
  */

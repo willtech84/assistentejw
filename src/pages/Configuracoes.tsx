@@ -8,6 +8,7 @@ import {
   desativarNotificacoes,
   statusPermissao,
   suportaPush,
+  temInscricaoAtiva,
 } from "../services/push";
 
 const PADRAO: Partial<ConfiguracoesType> = {
@@ -18,6 +19,10 @@ const PADRAO: Partial<ConfiguracoesType> = {
   confirmar_antes_enviar: true,
   mensagem_padrao:
     "Olá! Segue em anexo sua designação desta semana. Tenha uma excelente reunião!",
+  mensagem_designacao_outras:
+    "Olá! Você foi designado(a) para: {tipo}, na semana {semana}.",
+  mensagem_confirmacao_outras:
+    "Olá! Lembrete da sua designação ({tipo}) na semana {semana}. Por favor confirme sua participação.",
 };
 
 export default function Configuracoes() {
@@ -26,8 +31,14 @@ export default function Configuracoes() {
   const [carregando, setCarregando] = useState(true);
   const [salvo, setSalvo] = useState(false);
   const [statusPush, setStatusPush] = useState(statusPermissao());
+  const [inscricaoAtiva, setInscricaoAtiva] = useState(false);
   const [erroPush, setErroPush] = useState("");
+  const [sucessoPush, setSucessoPush] = useState("");
   const [ativandoPush, setAtivandoPush] = useState(false);
+
+  useEffect(() => {
+    temInscricaoAtiva().then(setInscricaoAtiva);
+  }, []);
 
   useEffect(() => {
     supabase
@@ -91,6 +102,45 @@ export default function Configuracoes() {
             rows={3}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
           />
+          <p className="mt-1 text-xs text-slate-400">
+            Usada pra partes de estudante (com ou sem o S-89 anexado).
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Mensagem de designação (partes sem S-89)
+          </label>
+          <textarea
+            value={config.mensagem_designacao_outras ?? ""}
+            onChange={(e) =>
+              setConfig({ ...config, mensagem_designacao_outras: e.target.value })
+            }
+            rows={3}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            Pra Presidente, Oração, Dirigentes, Estudo Bíblico e discursos —
+            o primeiro aviso da designação. Use {"{tipo}"} e {"{semana}"}.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Mensagem de confirmação (partes sem S-89)
+          </label>
+          <textarea
+            value={config.mensagem_confirmacao_outras ?? ""}
+            onChange={(e) =>
+              setConfig({ ...config, mensagem_confirmacao_outras: e.target.value })
+            }
+            rows={3}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            Lembrete separado, enviado depois, pra confirmar presença na
+            semana. Use {"{tipo}"} e {"{semana}"}.
+          </p>
         </div>
 
         <Toggle
@@ -115,16 +165,19 @@ export default function Configuracoes() {
               Lembrete automático de designações pendentes, enviado por
               notificação push neste navegador/dispositivo.
             </p>
-            {statusPush === "granted" ? (
+            {inscricaoAtiva ? (
               <button
                 type="button"
                 disabled={ativandoPush}
                 onClick={async () => {
                   setAtivandoPush(true);
                   setErroPush("");
+                  setSucessoPush("");
                   try {
                     await desativarNotificacoes();
                     setStatusPush(statusPermissao());
+                    setInscricaoAtiva(await temInscricaoAtiva());
+                    setSucessoPush("Notificações desativadas neste dispositivo.");
                   } catch (e) {
                     setErroPush((e as Error).message);
                   } finally {
@@ -143,9 +196,21 @@ export default function Configuracoes() {
                   if (!user) return;
                   setAtivandoPush(true);
                   setErroPush("");
+                  setSucessoPush("");
                   try {
                     await ativarNotificacoes(user.id);
                     setStatusPush(statusPermissao());
+                    const ativo = await temInscricaoAtiva();
+                    setInscricaoAtiva(ativo);
+                    if (ativo) {
+                      setSucessoPush(
+                        "Ativado! Você vai receber um lembrete neste dispositivo quando houver designações pendentes perto da reunião."
+                      );
+                    } else {
+                      setErroPush(
+                        "A permissão foi concedida, mas não foi possível confirmar a inscrição. Tente de novo."
+                      );
+                    }
                   } catch (e) {
                     setErroPush((e as Error).message);
                   } finally {
@@ -157,7 +222,16 @@ export default function Configuracoes() {
                 {ativandoPush ? "Ativando..." : "Ativar neste dispositivo"}
               </button>
             )}
+            {statusPush === "denied" && (
+              <p className="mt-2 text-amber-600">
+                As notificações estão bloqueadas pro site nas configurações do
+                seu navegador/Android — procure "Permissões do site" ou
+                "Notificações" nas configurações do Chrome pra esse site e
+                libere, depois volte aqui.
+              </p>
+            )}
             {erroPush && <p className="mt-2 text-red-600">{erroPush}</p>}
+            {sucessoPush && <p className="mt-2 text-emerald-600">{sucessoPush}</p>}
           </div>
         )}
 
