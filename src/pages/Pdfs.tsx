@@ -85,16 +85,44 @@ export default function Pdfs() {
         return { ...l, estudante_id, user_id: user.id };
       });
 
-      const { error } = await supabase.from("designacoes").insert(paraInserir);
+      // Evita duplicar designações já importadas antes — comum quando
+      // duas planilhas (de meses diferentes) cobrem a mesma semana por
+      // causa de uma faixa de datas que se sobrepõe. Antes de inserir,
+      // busca o que já existe no mesmo intervalo de datas e pula
+      // qualquer linha que bata em data+tipo+estudante+sala.
+      const datas = paraInserir.map((l) => l.data_reuniao).filter(Boolean);
+      const chave = (l: { data_reuniao: string; tipo: string; estudante: string; sala: string }) =>
+        `${l.data_reuniao}|${l.tipo}|${l.estudante}|${l.sala}`;
 
-      if (error) throw error;
+      let jaExistentes = new Set<string>();
+      if (datas.length > 0) {
+        const { data: existentes } = await supabase
+          .from("designacoes")
+          .select("data_reuniao, tipo, estudante, sala")
+          .eq("user_id", user.id)
+          .gte("data_reuniao", datas.reduce((a, b) => (a < b ? a : b)))
+          .lte("data_reuniao", datas.reduce((a, b) => (a > b ? a : b)));
+        jaExistentes = new Set((existentes ?? []).map(chave));
+      }
+
+      const novas = paraInserir.filter((l) => !jaExistentes.has(chave(l)));
+      const duplicadas = paraInserir.length - novas.length;
+
+      if (novas.length > 0) {
+        const { error } = await supabase.from("designacoes").insert(novas);
+        if (error) throw error;
+      }
 
       const avisoVinculo =
         semVinculo.length > 0
           ? ` ${new Set(semVinculo).size} nome(s) não encontrados no cadastro de estudantes — vincule manualmente em "Designações": ${[...new Set(semVinculo)].join(", ")}.`
           : "";
+      const avisoDuplicadas =
+        duplicadas > 0
+          ? ` ${duplicadas} já existiam (data+tipo+estudante+sala iguais) e foram ignoradas, sem duplicar.`
+          : "";
       setMensagem(
-        `${linhas.length} designações importadas com sucesso.${avisoVinculo}`
+        `${novas.length} designações importadas com sucesso.${avisoDuplicadas}${avisoVinculo}`
       );
     } catch (err) {
       setMensagem(
