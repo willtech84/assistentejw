@@ -5,6 +5,7 @@
 // autenticado aqui.
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { formatarDataBR } from "../lib/datas";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirmar`;
 
@@ -144,9 +145,9 @@ export default function Confirmar() {
                 </span>
               </p>
               <p>
-                <span className="text-slate-500">Semana:</span>{" "}
+                <span className="text-slate-500">Data:</span>{" "}
                 <span className="font-medium text-slate-900">
-                  {dados.semana}
+                  {formatarDataBR(dados.data_reuniao)}
                 </span>
               </p>
               <p>

@@ -18,11 +18,11 @@ const PADRAO: Partial<ConfiguracoesType> = {
   notificacoes: true,
   confirmar_antes_enviar: true,
   mensagem_padrao:
-    "Olá! Segue em anexo sua designação desta semana. Tenha uma excelente reunião!",
+    "Olá! Segue sua designação. Tenha uma excelente reunião!",
   mensagem_designacao_outras:
-    "Olá! Você foi designado(a) para: {tipo}, na semana {semana}.",
+    "Olá! Você foi designado(a) para: {tipo}, no dia {data}.",
   mensagem_confirmacao_outras:
-    "Olá! Lembrete da sua designação ({tipo}) na semana {semana}. Por favor confirme sua participação.",
+    "Olá! Lembrete da sua designação ({tipo}) no dia {data}. Por favor confirme sua participação.",
 };
 
 export default function Configuracoes() {
@@ -121,7 +121,7 @@ export default function Configuracoes() {
           />
           <p className="mt-1 text-xs text-slate-400">
             Pra Presidente, Oração, Dirigentes, Estudo Bíblico e discursos —
-            o primeiro aviso da designação. Use {"{tipo}"} e {"{semana}"}.
+            o primeiro aviso da designação. Use {"{tipo}"}, {"{data}"} e {"{nome}"}.
           </p>
         </div>
 
@@ -138,8 +138,8 @@ export default function Configuracoes() {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-400">
-            Lembrete separado, enviado depois, pra confirmar presença na
-            semana. Use {"{tipo}"} e {"{semana}"}.
+            Lembrete separado, enviado depois, pra confirmar presença no
+            dia da parte. Use {"{tipo}"}, {"{data}"} e {"{nome}"}.
           </p>
         </div>
 

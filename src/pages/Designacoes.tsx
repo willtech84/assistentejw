@@ -3,13 +3,14 @@ import { supabase } from "../lib/supabase";
 import type { Designacao, Configuracoes } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
 import {
-  abrirWhatsapp,
-  enviarComAnexo,
-  linkConfirmacao,
-  montarMensagemDesignacao,
-  montarMensagemDesignacaoOutras,
-} from "../services/whatsapp";
-import { gerarS89, nomeArquivoS89, ehParteDeEstudante } from "../services/s89";
+  enviarDesignacaoEstudante,
+  enviarDesignacaoOutras as enviarOutras,
+  lerModoS89,
+  type ModoS89,
+} from "../services/envioDesignacao";
+import ModoS89Select from "../components/ModoS89";
+import { formatarDataBR, diaDaSemana } from "../lib/datas";
+import { ehParteDeEstudante } from "../services/s89";
 import { gerarResumoSemanal, nomeArquivoResumo } from "../services/resumoSemanal";
 import {
   carregarEstudantesDoUsuario,
@@ -23,7 +24,7 @@ export default function Designacoes() {
   const [estudantes, setEstudantes] = useState<EstudanteBasico[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [editando, setEditando] = useState<Partial<Designacao> | null>(null);
-  const [anexarPdf, setAnexarPdf] = useState(true);
+  const [modoS89, setModoS89] = useState<ModoS89>(lerModoS89());
   const [filtroData, setFiltroData] = useState("");
 
   async function carregar() {
@@ -80,171 +81,23 @@ export default function Designacoes() {
     carregar();
   }
 
-  async function marcarEnviada(d: Designacao, telefone: string) {
-    await supabase
-      .from("designacoes")
-      .update({ whatsapp_enviado: true })
-      .eq("id", d.id);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    await supabase.from("historico_envios").insert({
-      estudante_id: d.estudante_id,
-      estudante: d.estudante,
-      telefone,
-      mensagem: `${d.tipo} — ${d.semana}`,
-      sucesso: true,
-      user_id: user?.id,
-    });
+  async function enviar(d: Designacao) {
+    if (!d.estudante) return;
+    await enviarDesignacaoEstudante(d, config, modoS89);
     carregar();
   }
 
-  async function enviar(d: Designacao) {
-    if (!d.estudante) return;
-
-    if (!d.estudante_id) {
-      alert(
-        `"${d.estudante}" não está vinculado a um estudante cadastrado. ` +
-          `Edite esta designação e selecione o estudante na lista antes de enviar.`
-      );
-      return;
-    }
-
-    const mensagem = montarMensagemDesignacao({
-      mensagemPadrao: config?.mensagem_padrao ?? "",
-      nomeEstudante: d.estudante,
-      tipo: d.tipo,
-      semana: d.semana,
-      linkConfirmacao: linkConfirmacao(d.token_confirmacao),
-    });
-
-    // Telefone vem do cadastro via estudante_id (FK) — não mais por
-    // casamento de nome em tempo de execução, que falhava
-    // silenciosamente com nomes duplicados ou digitação diferente.
-    const { data: estudante } = await supabase
-      .from("estudantes")
-      .select("telefone")
-      .eq("id", d.estudante_id)
-      .maybeSingle();
-
-    if (!estudante?.telefone) {
-      alert(
-        `Telefone de "${d.estudante}" não encontrado no cadastro de estudantes.`
-      );
-      return;
-    }
-
-    if (anexarPdf && ehParteDeEstudante(d.tipo)) {
-      try {
-        const pdfBytes = await gerarS89(d);
-        const resultado = await enviarComAnexo(
-          estudante.telefone,
-          mensagem,
-          pdfBytes,
-          nomeArquivoS89(d)
-        );
-        if (resultado === "baixado") {
-          alert(
-            "O S-89 preenchido foi baixado e o WhatsApp abriu, mas sem mirar o contato certo " +
-              "(limitação da folha de compartilhamento) — escolha o contato e arraste o arquivo pro chat."
-          );
-        } else {
-          alert(
-            "O WhatsApp abriu pra você escolher o contato (a folha de compartilhamento não sabe " +
-              "abrir direto na conversa) — escolha o contato certo pra anexar o S-89. " +
-              "A mensagem também foi copiada — se ela não aparecer sozinha no chat, é só colar."
-          );
-        }
-      } catch (err) {
-        if ((err as Error)?.name === "AbortError") return; // cancelou a folha de compartilhamento
-        alert(`Não foi possível gerar o S-89: ${(err as Error).message}`);
-        return;
-      }
-    } else {
-      abrirWhatsapp(estudante.telefone, mensagem);
-    }
-
-    if (config?.confirmar_antes_enviar !== false) {
-      if (confirm("Marcar esta designação como enviada?")) {
-        await marcarEnviada(d, estudante.telefone);
-      }
-    } else {
-      await marcarEnviada(d, estudante.telefone);
-    }
-  }
-
   // Partes sem S-89 (Presidente, Oração, Dirigentes, Estudo Bíblico,
-  // discursos) têm 2 envios separados: o aviso da designação (marca
-  // como enviado, igual enviar()) e, depois, um lembrete de
-  // confirmação à parte — que NÃO mexe no status de enviado, só
-  // registra no histórico, porque é um lembrete extra, não o envio
-  // original.
-  async function buscarTelefone(d: Designacao): Promise<string | null> {
-    if (!d.estudante_id) {
-      alert(
-        `"${d.estudante}" não está vinculado a um estudante cadastrado. ` +
-          `Edite esta designação e selecione o estudante na lista antes de enviar.`
-      );
-      return null;
-    }
-    const { data: estudante } = await supabase
-      .from("estudantes")
-      .select("telefone")
-      .eq("id", d.estudante_id)
-      .maybeSingle();
-    if (!estudante?.telefone) {
-      alert(`Telefone de "${d.estudante}" não encontrado no cadastro de estudantes.`);
-      return null;
-    }
-    return estudante.telefone;
-  }
-
+  // discursos): 2 botões. Os dois marcam a designação como enviada
+  // ANTES de abrir o WhatsApp (ver services/envioDesignacao.ts).
   async function enviarDesignacaoOutras(d: Designacao) {
-    const telefone = await buscarTelefone(d);
-    if (!telefone) return;
-
-    const mensagem = montarMensagemDesignacaoOutras({
-      modelo: config?.mensagem_designacao_outras ?? "",
-      nomeEstudante: d.estudante,
-      tipo: d.tipo,
-      semana: d.semana,
-      linkConfirmacao: linkConfirmacao(d.token_confirmacao),
-    });
-    abrirWhatsapp(telefone, mensagem);
-
-    if (config?.confirmar_antes_enviar !== false) {
-      if (confirm("Marcar esta designação como enviada?")) {
-        await marcarEnviada(d, telefone);
-      }
-    } else {
-      await marcarEnviada(d, telefone);
-    }
+    await enviarOutras(d, config, "designacao");
+    carregar();
   }
 
   async function enviarConfirmacaoOutras(d: Designacao) {
-    const telefone = await buscarTelefone(d);
-    if (!telefone) return;
-
-    const mensagem = montarMensagemDesignacaoOutras({
-      modelo: config?.mensagem_confirmacao_outras ?? "",
-      nomeEstudante: d.estudante,
-      tipo: d.tipo,
-      semana: d.semana,
-      linkConfirmacao: linkConfirmacao(d.token_confirmacao),
-    });
-    abrirWhatsapp(telefone, mensagem);
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    await supabase.from("historico_envios").insert({
-      estudante_id: d.estudante_id,
-      estudante: d.estudante,
-      telefone,
-      mensagem: `Lembrete de confirmação — ${d.tipo} — ${d.semana}`,
-      sucesso: true,
-      user_id: user?.id,
-    });
+    await enviarOutras(d, config, "confirmacao");
+    carregar();
   }
 
   async function excluir(d: Designacao) {
@@ -285,10 +138,7 @@ export default function Designacoes() {
 
   const datasDisponiveis = Array.from(new Set(lista.map((d) => d.data_reuniao)))
     .sort()
-    .map((data) => ({
-      data,
-      semana: lista.find((d) => d.data_reuniao === data)?.semana ?? "",
-    }));
+    .map((data) => ({ data }));
 
   const listaFiltrada = filtroData
     ? lista.filter((d) => d.data_reuniao === filtroData)
@@ -321,30 +171,16 @@ export default function Designacoes() {
       />
 
       <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 md:px-6">
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={anexarPdf}
-            onChange={(e) => setAnexarPdf(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
-          />
-          Anexar S-89 ao enviar
-        </label>
-        <span className="text-xs text-slate-400">
-          {anexarPdf
-            ? "— abre a folha de compartilhar; você escolhe o contato"
-            : "— abre direto na conversa do contato, sem anexo"}
-        </span>
+        <ModoS89Select value={modoS89} onChange={setModoS89} />
         <select
           value={filtroData}
           onChange={(e) => setFiltroData(e.target.value)}
           className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700"
         >
-          <option value="">Todas as semanas</option>
-          {datasDisponiveis.map(({ data, semana }) => (
+          <option value="">Todas as datas</option>
+          {datasDisponiveis.map(({ data }) => (
             <option key={data} value={data}>
-              {new Date(data + "T00:00:00").toLocaleDateString("pt-BR")}
-              {semana ? ` — ${semana}` : ""}
+              {formatarDataBR(data)}
             </option>
           ))}
         </select>
@@ -359,18 +195,14 @@ export default function Designacoes() {
             planilha Excel em "PDFs".
           </p>
         ) : (
-          Object.entries(porSemana).map(([semana, itens]) => (
-            <div key={semana}>
+          Object.entries(porSemana).map(([data, itens]) => (
+            <div key={data}>
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-500">
-                  {new Date(itens[0].data_reuniao + "T00:00:00").toLocaleDateString(
-                    "pt-BR",
-                    { weekday: "long", day: "2-digit", month: "long" }
-                  )}
-                  {semana ? ` — ${semana}` : ""}
+                  {formatarDataBR(itens[0].data_reuniao)} ({diaDaSemana(itens[0].data_reuniao)})
                 </h2>
                 <button
-                  onClick={() => baixarResumoSemana(semana, itens)}
+                  onClick={() => baixarResumoSemana(formatarDataBR(data), itens)}
                   className="text-xs text-indigo-600 hover:underline"
                 >
                   Baixar resumo de confirmações
@@ -578,11 +410,6 @@ export default function Designacoes() {
                 <option value="C">Sala C</option>
               </select>
             </div>
-            <Campo
-              label="Semana (ex: 11-17 de agosto)"
-              value={editando.semana ?? ""}
-              onChange={(v) => setEditando({ ...editando, semana: v })}
-            />
 
             <div className="flex justify-end gap-2 pt-2">
               <button

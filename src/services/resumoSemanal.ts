@@ -24,7 +24,7 @@ function linhaDesignacao(d: Designacao): string {
 
 export async function gerarResumoSemanal(
   designacoes: Designacao[],
-  semana: string
+  semana: string // rótulo da data (dd/mm/aaaa) — o nome do parâmetro é histórico
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const fonte = await pdf.embedFont(StandardFonts.Helvetica);
@@ -57,7 +57,7 @@ export async function gerarResumoSemanal(
 
   texto("Resumo semanal de designações", { tamanho: 16, negrito: true });
   novaLinha(24);
-  texto(`Semana: ${semana}`, { tamanho: 11, cor: [0.4, 0.4, 0.4] });
+  texto(`Reunião de: ${semana}`, { tamanho: 11, cor: [0.4, 0.4, 0.4] });
   novaLinha(28);
 
   const confirmados = designacoes.filter((d) => d.confirmacao_status === "confirmado");

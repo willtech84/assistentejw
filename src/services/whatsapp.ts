@@ -1,3 +1,5 @@
+import { formatarDataBR } from "../lib/datas";
+
 // Envio via WhatsApp usando deep links.
 //
 // Importante: isso NÃO é envio automático. Não há uma API oficial do
@@ -106,15 +108,20 @@ export function montarMensagemDesignacao(params: {
   mensagemPadrao: string;
   nomeEstudante: string;
   tipo: string;
-  semana: string;
+  dataReuniao: string; // ISO (aaaa-mm-dd)
   linkConfirmacao?: string;
+  linkS89?: string;
 }): string {
-  const { mensagemPadrao, nomeEstudante, tipo, semana, linkConfirmacao } = params;
+  const { mensagemPadrao, nomeEstudante, tipo, dataReuniao, linkConfirmacao, linkS89 } =
+    params;
   let msg =
     `Olá, ${nomeEstudante}!\n\n` +
     `${mensagemPadrao}\n\n` +
     `Designação: ${tipo}\n` +
-    `Semana: ${semana}`;
+    `Data: ${formatarDataBR(dataReuniao)}`;
+  if (linkS89) {
+    msg += `\n\n📄 Seu formulário S-89 (toque para abrir): ${linkS89}`;
+  }
   if (linkConfirmacao) {
     msg += `\n\n👉 Clique no link para confirmar sua participação: ${linkConfirmacao}`;
   }
@@ -128,19 +135,26 @@ export function montarMensagemDesignacao(params: {
 // / mensagem_confirmacao_outras), com {tipo} e {semana} substituídos.
 function substituirVariaveis(
   modelo: string,
-  vars: { tipo: string; semana: string; nomeEstudante: string }
+  vars: { tipo: string; dataReuniao: string; nomeEstudante: string }
 ): string {
-  return modelo
-    .replace(/\{tipo\}/gi, vars.tipo)
-    .replace(/\{semana\}/gi, vars.semana)
-    .replace(/\{nome\}/gi, vars.nomeEstudante.split(" ")[0]);
+  const data = formatarDataBR(vars.dataReuniao);
+  return (
+    modelo
+      // modelos antigos salvos no banco dizem "na semana {semana}" —
+      // agora o app informa só o dia em que a parte será feita
+      .replace(/na semana\s*\{semana\}/gi, "no dia {data}")
+      .replace(/\{tipo\}/gi, vars.tipo)
+      .replace(/\{semana\}/gi, data)
+      .replace(/\{data\}/gi, data)
+      .replace(/\{nome\}/gi, vars.nomeEstudante.split(" ")[0])
+  );
 }
 
 export function montarMensagemDesignacaoOutras(params: {
   modelo: string;
   nomeEstudante: string;
   tipo: string;
-  semana: string;
+  dataReuniao: string; // ISO (aaaa-mm-dd)
   linkConfirmacao?: string;
 }): string {
   const { modelo, linkConfirmacao, ...vars } = params;

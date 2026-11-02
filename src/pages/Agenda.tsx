@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Reuniao } from "../lib/database.types";
 import PageHeader from "../components/PageHeader";
+import { formatarDataBR } from "../lib/datas";
 
 export default function Agenda() {
   const [lista, setLista] = useState<Reuniao[]>([]);
@@ -71,13 +72,9 @@ export default function Agenda() {
               >
                 <div>
                   <p className="text-sm font-medium text-slate-900">
-                    {new Date(r.data + "T00:00:00").toLocaleDateString("pt-BR", {
-                      weekday: "long",
-                      day: "2-digit",
-                      month: "long",
-                    })}
+                    {formatarDataBR(r.data)}
                   </p>
-                  <p className="text-sm text-slate-500">{r.semana || r.tema}</p>
+                  <p className="text-sm text-slate-500">{r.tema}</p>
                 </div>
                 {r.importada && (
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
@@ -113,7 +110,7 @@ export default function Agenda() {
               />
             </div>
 
-            {(["semana", "presidente", "leitor"] as const).map((campo) => (
+            {(["presidente", "leitor"] as const).map((campo) => (
               <div key={campo}>
                 <label className="mb-1 block text-sm font-medium capitalize text-slate-700">
                   {campo}

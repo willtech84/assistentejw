@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import PageHeader from "../components/PageHeader";
+import { formatarDataBR } from "../lib/datas";
 
 interface Resumo {
   proximaReuniao: string | null;
-  proximaSemana: string | null;
   designacoesPendentes: number;
   totalEstudantes: number;
 }
@@ -21,7 +21,7 @@ export default function Home() {
         await Promise.all([
           supabase
             .from("designacoes")
-            .select("data_reuniao, semana")
+            .select("data_reuniao")
             .gte("data_reuniao", hoje)
             .order("data_reuniao", { ascending: true })
             .limit(1)
@@ -38,7 +38,6 @@ export default function Home() {
 
       setResumo({
         proximaReuniao: proxima?.data_reuniao ?? null,
-        proximaSemana: proxima?.semana ?? null,
         designacoesPendentes: pendentes ?? 0,
         totalEstudantes: estudantes ?? 0,
       });
@@ -54,10 +53,9 @@ export default function Home() {
           titulo="Próxima reunião"
           valor={
             resumo?.proximaReuniao
-              ? new Date(resumo.proximaReuniao + "T00:00:00").toLocaleDateString("pt-BR")
+              ? formatarDataBR(resumo.proximaReuniao)
               : "—"
           }
-          subtitulo={resumo?.proximaSemana ? `Semana: ${resumo.proximaSemana}` : undefined}
           link="/designacoes"
         />
         <Cartao
